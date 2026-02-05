@@ -15,8 +15,11 @@ class App(wx.Frame):
         self.fileMenu = wx.Menu()
 
         # create save option and main text box
+        self.newCommand = self.fileMenu.Append(wx.ID_NEW, "&New\tCtrl+N", "New")
+        self.newWindowCommand = self.fileMenu.Append(-1, "&New Window\tCtrl+Shift+N", "New Window")
         self.saveItem = self.fileMenu.Append(wx.ID_SAVE, "&Save\tCtrl+S", "Save")
         self.loadItem = self.fileMenu.Append(wx.ID_OPEN, "&Open\tCtrl+O", "Open")
+        self.saveAsItem = self.fileMenu.Append(wx.ID_SAVEAS, "&Save As\tCtrl+Shift+S", "Save As")
         self.text = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE)
 
         # supported file types
@@ -44,43 +47,38 @@ class App(wx.Frame):
         self.Layout()
 
         # Bind the event handler
+        self.Bind(wx.EVT_MENU, self.on_new, self.newCommand)
+        self.Bind(wx.EVT_MENU, self.on_new_window, self.newWindowCommand)
         self.Bind(wx.EVT_MENU, self.on_save, self.saveItem)
         self.Bind(wx.EVT_MENU, self.on_load, self.loadItem)
+        self.Bind(wx.EVT_MENU, self.save_dialog, self.saveAsItem)
+
+    def save_dialog(self, event):
+        with wx.FileDialog(self, "Save As", wildcard=self.file_types,
+                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
+            if fileDialog.ShowModal() == wx.ID_OK:
+                pathname = fileDialog.GetPath()
+                try:
+                    # Save the content of the text control to the chosen file
+                    with open(pathname, 'w') as f:
+                        f.write(self.text.GetValue())
+                except IOError:
+                    wx.LogError(f"Cannot save file '{pathname}'.")
 
     def on_save(self, event):
         """Handles the save file menu command"""
-        print(event)
-
-        def save_dialog():
-            # Use a wx.FileDialog for saving the file
-            with wx.FileDialog(self, "Save File", wildcard=self.file_types,
-                               style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
-                if fileDialog.ShowModal() == wx.ID_OK:
-                    pathname = fileDialog.GetPath()
-                    try:
-                        # Save the content of the text control to the chosen file
-                        with open(pathname, 'w') as f:
-                            f.write(self.text.GetValue())
-                    except IOError:
-                        wx.LogError(f"Cannot save file '{pathname}'.")
-
-        if self.file_path:
-            if os.path.exists(self.file_path):
-                try:
-                    # Save the content of the text control to the chosen file
-                    with open(self.file_path, 'w') as file:
-                        file.write(self.text.GetValue())
-                except IOError:
-                    wx.LogError(f"Cannot save file '{self.file_path}'.")
-            else:
-                wx.LogError("File does not exist")
-                save_dialog()
+        if self.file_path and os.path.exists(self.file_path):
+            try:
+                # Save the content of the text control to the chosen file
+                with open(self.file_path, 'w') as file:
+                    file.write(self.text.GetValue())
+            except IOError:
+                wx.LogError(f"Cannot save file '{self.file_path}'.")
+        else:
+            self.save_dialog(event)
 
     def on_load(self, event):
         """Handles the load file menu command"""
-        if self.file_path:
-            print(event)
-
         with wx.FileDialog(self, "Open File", wildcard=self.file_types,
                            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:
             if fileDialog.ShowModal() == wx.ID_OK:
@@ -89,10 +87,31 @@ class App(wx.Frame):
                     # open the selected file
                     with open(self.file_path, "r") as file:
                         data = file.read()
-                        # input text in the text control
-                        self.text.AppendText(data)
+                        # input text in the text control after clearing it
+                        self.text.Clear()
+                        self.text.WriteText(data)
                 except IOError:
                     wx.LogError(f"Cannot open file '{self.file_path}'.")
+
+    def on_new(self, event):
+        if self._check_save():
+            self.text.Clear()
+        else:
+            wx.LogWarning("You have not saved your document")
+
+    @staticmethod
+    def on_new_window(event):
+        # print(event)
+        new_app = App(None)
+        new_app.Show()
+
+    def _check_save(self):
+        # check if the value in the text control is the same as the content of file(if it is saved)
+        if self.file_path and os.path.exists(self.file_path):
+            with open(self.file_path, "r") as f:
+                return f.read() == self.text.GetValue()
+        else:
+            return False
 
 
 if __name__ == '__main__':
