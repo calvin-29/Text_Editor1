@@ -10,17 +10,30 @@ class App(wx.Frame):
         self.panel = wx.Panel(self)
         self.sizer = wx.BoxSizer(wx.VERTICAL)
 
-        # create menu bar and file menu
+        # create menu bar and menus
         self.menuBar = wx.MenuBar()
         self.fileMenu = wx.Menu()
+        self.editMenu = wx.Menu()
 
-        # create save option and main text box
+        # create options for file menu
         self.newCommand = self.fileMenu.Append(wx.ID_NEW, "&New\tCtrl+N", "New")
         self.newWindowCommand = self.fileMenu.Append(-1, "&New Window\tCtrl+Shift+N", "New Window")
         self.saveItem = self.fileMenu.Append(wx.ID_SAVE, "&Save\tCtrl+S", "Save")
         self.loadItem = self.fileMenu.Append(wx.ID_OPEN, "&Open\tCtrl+O", "Open")
         self.saveAsItem = self.fileMenu.Append(wx.ID_SAVEAS, "&Save As\tCtrl+Shift+S", "Save As")
-        self.text = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE)
+        self.fileMenu.AppendSeparator()
+        self.exitCommand = self.fileMenu.Append(-1, "&Exit", "Exit")
+
+        # create options for edit menu
+        self.undoCommand = self.editMenu.Append(wx.ID_UNDO, "Undo\tCtrl+Z")
+        self.editMenu.AppendSeparator()
+        self.cutCommand = self.editMenu.Append(wx.ID_CUT, "Cut\tCtrl+X")
+        self.copyCommand = self.editMenu.Append(wx.ID_COPY, "Copy\tCtrl+C")
+        self.pasteCommand = self.editMenu.Append(wx.ID_PASTE, "Paste\tCtrl+V")
+        self.deleteCommand = self.editMenu.Append(wx.ID_DELETE, "Delete\tDel")
+
+        # The text box
+        self.text = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE | wx.TE_RICH2)
 
         # supported file types
         self.file_types = "Text files (*.txt)|*.txt|" \
@@ -39,10 +52,11 @@ class App(wx.Frame):
 
         # Set font of text box
         self.text.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
-                              wx.FONTWEIGHT_NORMAL, False, "Consolas"))
+                          wx.FONTWEIGHT_NORMAL, False, "Consolas"))
 
         # Add items to menu bar
         self.menuBar.Append(self.fileMenu, "&File")
+        self.menuBar.Append(self.editMenu, "&Edit")
 
         # Set up layout
         self.sizer.Add(self.text, 1, wx.EXPAND | wx.ALL, 5)
@@ -51,11 +65,26 @@ class App(wx.Frame):
         self.Layout()
 
         # Bind the event handler
-        self.Bind(wx.EVT_MENU, self.on_new, self.newCommand)
-        self.Bind(wx.EVT_MENU, self.on_new_window, self.newWindowCommand)
-        self.Bind(wx.EVT_MENU, self.on_save, self.saveItem)
-        self.Bind(wx.EVT_MENU, self.on_load, self.loadItem)
-        self.Bind(wx.EVT_MENU, self.save_dialog, self.saveAsItem)
+        func_widget = {
+            self.on_new: self.newCommand,
+            self.on_new_window: self.newWindowCommand,
+            self.on_save: self.saveItem,
+            self.on_load: self.loadItem,
+            self.save_dialog: self.saveAsItem,
+            lambda e: self.Destroy(): self.exitCommand,
+            lambda e: self.text.Undo(): self.undoCommand,
+            lambda e: self.text.Cut(): self.cutCommand,
+            lambda e: self.text.Copy(): self.copyCommand,
+            lambda e: self.text.Paste(): self.pasteCommand,
+            self.delete: self.deleteCommand
+        }
+        for i, j in func_widget.items():
+            self.Bind(wx.EVT_MENU, i, j)
+
+        # Add "*" to title if file is altered
+        self.Bind(wx.EVT_TEXT, lambda e: self.SetTitle(
+            self.GetTitle() if self.GetTitle().startswith("*") else "*"+self.GetTitle()
+        ), self.text)
 
     def save_dialog(self, event):
         with wx.FileDialog(self, "Save As", wildcard=self.file_types,
@@ -67,6 +96,10 @@ class App(wx.Frame):
                     with open(self.file_path, 'w') as f:
                         f.write(self.text.GetValue())
                         self.SetTitle(os.path.basename(self.file_path))
+                    # remove the * in the title if any
+                    self.SetTitle(
+                        self.GetTitle()[1:] if self.GetTitle().startswith("*") else self.GetTitle()
+                    )
                 except IOError:
                     wx.LogError(f"Cannot save file '{self.file_path}'.")
 
@@ -77,6 +110,10 @@ class App(wx.Frame):
                 # Save the content of the text control to the chosen file
                 with open(self.file_path, 'w') as file:
                     file.write(self.text.GetValue())
+                # remove the * in the title if any
+                self.SetTitle(
+                    self.GetTitle()[1:] if self.GetTitle().startswith("*") else self.GetTitle()
+                )
             except IOError:
                 wx.LogError(f"Cannot save file '{self.file_path}'.")
         else:
@@ -122,6 +159,11 @@ class App(wx.Frame):
                 return f.read() == self.text.GetValue()
         else:
             return False
+
+    def delete(self, event):
+        start_pos, end_pos = self.text.GetSelection()
+        if start_pos != end_pos:
+            self.text.Remove(start_pos, end_pos)
 
 
 if __name__ == '__main__':
