@@ -1,5 +1,7 @@
 import wx
+import wx.stc
 import os
+import time
 
 
 class App(wx.Frame):
@@ -14,6 +16,7 @@ class App(wx.Frame):
         self.menuBar = wx.MenuBar()
         self.fileMenu = wx.Menu()
         self.editMenu = wx.Menu()
+        self.formatMenu = wx.Menu()
 
         # create options for file menu
         self.newCommand = self.fileMenu.Append(wx.ID_NEW, "&New\tCtrl+N", "New")
@@ -31,9 +34,18 @@ class App(wx.Frame):
         self.copyCommand = self.editMenu.Append(wx.ID_COPY, "Copy\tCtrl+C")
         self.pasteCommand = self.editMenu.Append(wx.ID_PASTE, "Paste\tCtrl+V")
         self.deleteCommand = self.editMenu.Append(wx.ID_DELETE, "Delete\tDel")
+        self.editMenu.AppendSeparator()
+        self.selectAllCommand = self.editMenu.Append(wx.ID_SELECTALL, "&Select All\tCtrl+A")
+        self.time_dateCommand = self.editMenu.Append(wx.ID_SELECTALL, "&Time\\Date\tF5")
 
-        # The text box
-        self.text = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE | wx.TE_RICH2)
+        # create options for format menu
+        self.word_wrap = self.formatMenu.Append(-1, "&Word Wrap")
+        self.font = self.formatMenu.Append(-1, "&Font..")
+
+        # The text box and its font
+        self.text = wx.stc.StyledTextCtrl(self.panel)
+        self.current_font = wx.Font(12, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL,
+                                    wx.FONTWEIGHT_NORMAL, faceName="Consolas")
 
         # supported file types
         self.file_types = "Text files (*.txt)|*.txt|" \
@@ -51,15 +63,16 @@ class App(wx.Frame):
         self.SetSize(1000, 500)
 
         # Set font of text box
-        self.text.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
-                          wx.FONTWEIGHT_NORMAL, False, "Consolas"))
+        self.text.StyleSetFont(wx.stc.STC_STYLE_DEFAULT, self.current_font)
+        self.text.StyleClearAll()
 
         # Add items to menu bar
         self.menuBar.Append(self.fileMenu, "&File")
         self.menuBar.Append(self.editMenu, "&Edit")
+        self.menuBar.Append(self.formatMenu, "&Format")
 
         # Set up layout
-        self.sizer.Add(self.text, 1, wx.EXPAND | wx.ALL, 5)
+        self.sizer.Add(self.text, 1, wx.EXPAND | wx.ALL)
         self.panel.SetSizer(self.sizer)
         self.SetMenuBar(self.menuBar)
         self.Layout()
@@ -76,7 +89,16 @@ class App(wx.Frame):
             lambda e: self.text.Cut(): self.cutCommand,
             lambda e: self.text.Copy(): self.copyCommand,
             lambda e: self.text.Paste(): self.pasteCommand,
-            self.delete: self.deleteCommand
+            self.delete: self.deleteCommand,
+            lambda e: self.text.SelectAll(): self.selectAllCommand,
+            lambda e: self.text.AppendText(
+                f"{time.localtime().tm_hour - 12 if time.localtime().tm_hour > 12 else time.localtime().tm_hour}"
+                f":{time.localtime().tm_min} "
+                f"{'pm' if time.localtime().tm_hour > 12 else 'am'} "
+                f"{time.localtime().tm_mday}/{time.localtime().tm_mon:02}/{time.localtime().tm_year:02}"
+            ): self.time_dateCommand,
+            self.wrap: self.word_wrap,
+            self.set_font: self.font
         }
         for i, j in func_widget.items():
             self.Bind(wx.EVT_MENU, i, j)
@@ -165,6 +187,26 @@ class App(wx.Frame):
         if start_pos != end_pos:
             self.text.Remove(start_pos, end_pos)
 
+    def wrap(self, event):
+        mode = self.text.GetWrapMode()
+
+        if mode == wx.stc.STC_WRAP_NONE:
+            self.text.SetWrapMode(wx.stc.STC_WRAP_WORD)
+        elif mode == wx.stc.STC_WRAP_WORD:
+            self.text.SetWrapMode(wx.stc.STC_WRAP_NONE)
+        else:
+            self.text.SetWrapMode(wx.stc.STC_WRAP_NONE)
+
+    def set_font(self, event):
+        dialog = wx.FontDialog(self)
+        if dialog.ShowModal() == wx.ID_OK:
+            data = dialog.GetFontData()
+            font = data.GetChosenFont()
+
+            if font.IsOk():
+                self.current_font = font
+                self.text.StyleSetFont(wx.stc.STC_STYLE_DEFAULT, font)
+                self.text.StyleClearAll()
 
 if __name__ == '__main__':
     app = wx.App(False)
