@@ -36,7 +36,7 @@ class App(wx.Frame):
         self.deleteCommand = self.editMenu.Append(wx.ID_DELETE, "Delete\tDel")
         self.editMenu.AppendSeparator()
         self.selectAllCommand = self.editMenu.Append(wx.ID_SELECTALL, "&Select All\tCtrl+A")
-        self.time_dateCommand = self.editMenu.Append(wx.ID_SELECTALL, "&Time\\Date\tF5")
+        self.time_dateCommand = self.editMenu.Append(-1, "&Time\\Date\tF5")
 
         # create options for format menu
         self.word_wrap = self.formatMenu.Append(-1, "&Word Wrap")
@@ -57,6 +57,14 @@ class App(wx.Frame):
 
         # modify ui elements
         self.init_ui()
+
+        # Create StatusBar and text
+        self.statusBar = self.CreateStatusBar()
+        self.statusBar.SetFieldsCount(3)
+        self.statusBar.SetStatusWidths([-6, -2, -2])
+        self.SetStatusText("", 0)
+        self.SetStatusText("Ln 1, Col 1", 1)
+        self.SetStatusText("100%", 2)
 
     def init_ui(self):
         self.SetTitle("*Untitled - Text Editor")
@@ -104,9 +112,7 @@ class App(wx.Frame):
             self.Bind(wx.EVT_MENU, i, j)
 
         # Add "*" to title if file is altered
-        self.Bind(wx.EVT_TEXT, lambda e: self.SetTitle(
-            self.GetTitle() if self.GetTitle().startswith("*") else "*"+self.GetTitle()
-        ), self.text)
+        self.Bind(wx.stc.EVT_STC_MODIFIED, self.change, self.text)
 
     def save_dialog(self, event):
         with wx.FileDialog(self, "Save As", wildcard=self.file_types,
@@ -152,7 +158,7 @@ class App(wx.Frame):
                     with open(self.file_path, "r") as file:
                         data = file.read()
                         # input text in the text control after clearing it
-                        self.text.Clear()
+                        self.text.ClearAll()
                         self.text.WriteText(data)
                         # change title
                         self.SetTitle(f"{os.path.basename(self.file_path)} - Notepad")
@@ -163,7 +169,7 @@ class App(wx.Frame):
 
     def on_new(self, event):
         if self._check_save():
-            self.text.Clear()
+            self.text.ClearAll()
             self.SetTitle("*Untitled - Text Editor")
             self.file_path = None
         else:
@@ -207,6 +213,14 @@ class App(wx.Frame):
                 self.current_font = font
                 self.text.StyleSetFont(wx.stc.STC_STYLE_DEFAULT, font)
                 self.text.StyleClearAll()
+    
+    def change(self, event):
+        self.SetTitle(
+            self.GetTitle() if self.GetTitle().startswith("*") else "*" + self.GetTitle()
+        )
+        pos = self.text.GetCurrentPos()
+        self.SetStatusText(f"Ln {self.text.LineFromPosition(pos)+1} Col {self.text.GetColumn(pos)+1}", 1)
+
 
 if __name__ == '__main__':
     app = wx.App(False)
