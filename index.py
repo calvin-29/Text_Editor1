@@ -3,7 +3,6 @@ import wx.stc
 import os
 import time
 
-
 class App(wx.Frame):
     def __init__(self, *args, **kwargs):
         super(App, self).__init__(*args, **kwargs)
@@ -35,6 +34,8 @@ class App(wx.Frame):
         self.pasteCommand = self.editMenu.Append(wx.ID_PASTE, "Paste\tCtrl+V")
         self.deleteCommand = self.editMenu.Append(wx.ID_DELETE, "Delete\tDel")
         self.editMenu.AppendSeparator()
+        self.findCommand = self.editMenu.Append(wx.ID_FIND, "FInd\tCtrl+F")
+        self.editMenu.AppendSeparator()
         self.selectAllCommand = self.editMenu.Append(wx.ID_SELECTALL, "&Select All\tCtrl+A")
         self.time_dateCommand = self.editMenu.Append(-1, "&Time\\Date\tF5")
 
@@ -65,6 +66,10 @@ class App(wx.Frame):
         self.SetStatusText("", 0)
         self.SetStatusText("Ln 1, Col 1", 1)
         self.SetStatusText("100%", 2)
+
+        # find dialog data
+        self.find_data = None
+        self.find_dlg = None
 
     def init_ui(self):
         self.SetTitle("*Untitled - Text Editor")
@@ -98,6 +103,7 @@ class App(wx.Frame):
             lambda e: self.text.Copy(): self.copyCommand,
             lambda e: self.text.Paste(): self.pasteCommand,
             self.delete: self.deleteCommand,
+            self.findText: self.findCommand,
             lambda e: self.text.SelectAll(): self.selectAllCommand,
             lambda e: self.text.AppendText(
                 f"{time.localtime().tm_hour - 12 if time.localtime().tm_hour > 12 else time.localtime().tm_hour}"
@@ -157,9 +163,8 @@ class App(wx.Frame):
                     # open the selected file
                     with open(self.file_path, "r") as file:
                         data = file.read()
-                        # input text in the text control after clearing it
-                        self.text.ClearAll()
-                        self.text.WriteText(data)
+                        # input text in the text control after reading it
+                        self.text.SetText(data)
                         # change title
                         self.SetTitle(f"{os.path.basename(self.file_path)} - Notepad")
                 except IOError:
@@ -221,6 +226,51 @@ class App(wx.Frame):
         pos = self.text.GetCurrentPos()
         self.SetStatusText(f"Ln {self.text.LineFromPosition(pos)+1} Col {self.text.GetColumn(pos)+1}", 1)
 
+    def findText(self, event):
+        if not self.find_data:
+            self.find_data = wx.FindReplaceData()
+            self.find_data.SetFlags(wx.FR_DOWN)  # Default to searching down
+
+        self.find_dlg = wx.FindReplaceDialog(self.text, self.find_data,
+                                             "Find", wx.FR_NOMATCHCASE)
+        self.find_dlg.Bind(wx.EVT_FIND, self.on_find)
+        self.find_dlg.Bind(wx.EVT_FIND_NEXT, self.on_find)
+        self.find_dlg.Bind(wx.EVT_FIND_CLOSE, self.on_find_close)
+        self.find_dlg.Show()
+
+    def on_find(self, event):
+        search_string = event.GetFindString()
+        if not search_string:
+            return
+
+        # convert to STC flags
+        find_flags = self.find_data.GetFlags()
+        stc_flags = 0
+        if not (find_flags & wx.FR_MATCHCASE):
+            stc_flags |= wx.stc.STC_FIND_MATCHCASE
+        if find_flags & wx.FR_WHOLEWORD:
+            stc_flags |= wx.stc.STC_FIND_WHOLEWORD
+
+        search_down = event.GetFlags() & wx.FR_DOWN
+        if search_down:
+            self.text.SearchAnchor()
+            found_pos = self.text.SearchNext(stc_flags, search_string)
+        else:
+            current_pos = self.text.GetCurrentPos()
+            self.text.SetSelection(current_pos, current_pos)
+            self.text.SearchAnchor()
+            found_pos = self.text.SearchPrev(stc_flags, search_string)
+
+        # If nothing is found, show a message.
+        if found_pos == -1:
+            wx.MessageBox(f'Could not find "{search_string}"', 'Find',
+                          wx.OK | wx.ICON_INFORMATION, self)
+
+    def on_find_close(self, event):
+        """Destroy the dialog when it's closed."""
+        if self.find_dlg:
+            self.find_dlg.Destroy()
+            self.find_dlg = None
 
 if __name__ == '__main__':
     app = wx.App(False)
